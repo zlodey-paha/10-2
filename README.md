@@ -11,7 +11,46 @@
 
 ### Решщение 1
 
+![Балансировка1.1](https://github.com/zlodey-paha/10-2/blob/main/10-2/1.1.%20%D0%91%D0%B0%D0%BB%D0%B0%D0%BD%D1%81%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B0.PNG)
+![Балансировка1.2](https://github.com/zlodey-paha/10-2/blob/main/10-2/1.2.%20%D0%91%D0%B0%D0%BB%D0%B0%D0%BD%D1%81%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B0.PNG)
+![HAProxy.cfg](https://github.com/zlodey-paha/10-2/blob/main/10-2/1.3.%20haproxy.cfg)
+HAProxy.cfg
+```
+global
+    daemon
+    maxconn 256
+    log /dev/log local0
 
+defaults
+    mode http
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+    option forwardfor
+    option http-server-close
+    log global
+
+listen stats
+    bind *:1936
+    mode http
+    stats enable
+    stats hide-version
+    stats refresh 30s
+    stats show-node
+    stats auth admin:password
+    stats uri /haproxy?stats
+
+frontend http_front
+    bind *:80
+    default_backend http_back
+
+backend http_back
+    balance roundrobin
+    option httpchk GET /
+    
+    server server1 127.0.0.1:8081 check inter 2000 rise 2 fall 3
+    server server2 127.0.0.1:8082 check inter 2000 rise 2 fall 3
+```
 
 ------
 
@@ -23,7 +62,69 @@
 
 ### Решщение 2
 
+![Балансировка2.1](https://github.com/zlodey-paha/10-2/blob/main/10-2/2.1.%20%D0%91%D0%B0%D0%BB%D0%B0%D0%BD%D1%81%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B0.PNG)
+![Балансировка2.2](https://github.com/zlodey-paha/10-2/blob/main/10-2/2.2.%20%D0%91%D0%B0%D0%BB%D0%B0%D0%BD%D1%81%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B0.PNG)
+![HAProxy.cfg](https://github.com/zlodey-paha/10-2/blob/main/10-2/2.3.%20haproxy.cfg)
+HAProxy.cfg
+```
+global
+    daemon
+    maxconn 4000
+    log /dev/log local0 info
+    stats socket /var/run/haproxy/admin.sock mode 660 level admin
 
+defaults
+    mode http
+    log global
+    option httplog
+    option dontlognull
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+    retries 3
+    option redispatch
+
+listen stats
+    bind *:1936
+    mode http
+    stats enable
+    stats hide-version
+    stats refresh 30s
+    stats show-node
+    stats auth admin:password
+    stats uri /haproxy?stats
+
+frontend http_front
+    bind *:80
+    mode http
+    
+    acl is_example_local hdr(host) -i example.local
+    
+    use_backend http_servers if is_example_local
+    
+    default_backend invalid_domain
+
+backend http_servers
+    mode http
+    balance roundrobin
+    option httpchk GET /health
+    
+    server server1 127.0.0.1:8081 weight 2 check inter 2000 fall 3 rise 2
+    server server2 127.0.0.1:8082 weight 3 check inter 2000 fall 3 rise 2  
+    server server3 127.0.0.1:8083 weight 4 check inter 2000 fall 3 rise 2
+    
+    capture request header Host len 32
+    capture request header User-Agent len 64
+    http-request capture req.hdr(X-Forwarded-For) len 15
+
+backend invalid_domain
+    mode http
+    errorfile 503 /etc/haproxy/errors/403.http
+
+backend direct_access
+    mode http
+    server direct_server 127.0.0.1:8080
+```
 
 ---
 
